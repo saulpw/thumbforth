@@ -10,12 +10,6 @@
 @ memory map
 .equ SP0, 0x20000ffc
 .equ RP0, 0x20001000
-.equ TASK, 0x20000100
-
-.equ UARTDR, 0x4000C000  @ Data Register
-.equ UARTSR, 0x4000C004  @ Status Register
-.equ UARTFR, 0x4000C008  @ Flag Register
-.equ UARTIM, 0x4000C038  @ Interrupt Mask
 
 .text
 .align 4
@@ -72,30 +66,43 @@ ENTER:
     mov rIP, rWP
     b NEXT
 
+.thumb_func
+DOCONST:
+    push {rTOS}
+    ldr rTOS, [rWP]
+    b NEXT
+
+.thumb_func
+DOVAR:
+    push {rTOS}
+    mov rTOS, rWP
+    b NEXT
+
 @@@ manually defined composite forth words
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
 
-INIT:
+INIT: @ ( -- )
 .4byte ENTER
 .4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
-PROMPT:
+PROMPT: @ ( -- )
 .4byte ENTER
 .4byte DOLIT, 'O', EMIT, DOLIT, 'K', EMIT, DOLIT, 13, EMIT, EXIT
 
+UARTDR: .4byte DOCONST, 0x4000C000  @ Data Register
+UARTSR: .4byte DOCONST, 0x4000C004  @ Status Register
+UARTFR: .4byte DOCONST, 0x4000C008  @ Flag Register
+UARTIM: .4byte DOCONST, 0x4000C038  @ Interrupt Mask
+
 KEY: @ ( -- k )
 .4byte ENTER
-.4byte DOLIT, UARTDR, FETCH, QDUP, BRANCHZ, -6, EXIT
+.4byte UARTDR, FETCH, QDUP, BRANCHZ, -5, EXIT
 
-EMIT:
+EMIT: @ ( c -- )
 .4byte ENTER
-.4byte DOLIT, UARTDR, STORE, EXIT
+.4byte UARTDR, STORE, EXIT
 
-UARTSTATUS:
-.4byte ENTER
-.4byte DOLIT, UARTSR, FETCH, EXIT
-
-DOT:
+DOT:  @ ( n -- )
 .4byte ENTER
 .4byte DOLIT, '0', PLUS, EMIT, EXIT
 
@@ -166,12 +173,12 @@ native BRANCHZ
     add rIP, #4
 
     cmp rTOS, #0
-    bne .done
+    bne .BRANCHZ.done
 
     lsl r0, #2
     add rIP, r0
 
-.done:
+.BRANCHZ.done:
     pop {rTOS}
     b NEXT
 
