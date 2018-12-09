@@ -1,8 +1,8 @@
 # a small Forth for ARM Cortex M4 (ARMv7E-M)
 
 - install `qemu-system-arm`
-- `make` to build .bin and .lst
-- `gdb` to attach to remote server (see .gdbinit)
+- `make` to build forth.bin and run within qemu
+- `make debug` then `gdb` to attach to remote server (see .gdbinit)
 
 ## Features
 
