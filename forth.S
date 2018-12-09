@@ -80,7 +80,7 @@ ENTER:
 
 INIT:
 .4byte ENTER
-.4byte DOLITERAL, 72, EMIT, DOLITERAL, 73, EMIT, HALT
+.4byte DOLITERAL, 72, EMIT, DOLITERAL, 73, EMIT, EXIT
 
 @ native words
 @@ each must be followed by .4byte DOTHUMB
