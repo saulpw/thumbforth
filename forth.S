@@ -24,7 +24,7 @@
 .4byte _exc4      @ mm fault
 .4byte _exc5      @ bus fault
 .4byte _exc6      @ usage fault
-@ ... other interrupts not handled...
+@ ... other interrupts not handled ...
 
 @@ exception handlers in ARM format
 .arm
@@ -49,7 +49,6 @@ _reset:
     ldr rIP, =forth_start
     b NEXT
 
-@ .thumb_func  @ needed?
 NEXT:
     ldr r0, [rIP]    @ load next word pointer
     add rIP, #4
@@ -63,12 +62,6 @@ NEXT:
 @@ each must be preceded by .thumb_func for their pointers to have bit 0 set for Thumb instruction set
 
 .thumb_func
-DOTHUMB:
-    mov r0, #0x1
-    orr rWP, r0      @ use Thumb instruction set
-    bx rWP
-
-.thumb_func
 ENTER:
     str rIP, [rRP]
     add rRP, #4
@@ -80,49 +73,86 @@ ENTER:
 
 INIT:
 .4byte ENTER
-.4byte DOLITERAL, 72, EMIT, DOLITERAL, 73, EMIT, EXIT
+.4byte PROMPT, KEY, QDUP, BRANCHZ, -4, EMIT, BRANCH, -7, EXIT
+
+PROMPT:
+.4byte ENTER
+.4byte DOLIT, 'O', EMIT, DOLIT, 'K', EMIT, DOLIT, 13, EMIT, EXIT
 
 @ native words
-@@ each must be followed by .4byte DOTHUMB
-@@ must *not* use .thumb_func, or their pointers will have bit 0 set
+@@ each must be preceded by its own thumb address (ready to be branched to)
+@@ must *not* use .thumb_func themselves, or their pointers will have bit 0 set
 
-EXIT:
-.4byte DOTHUMB
+.macro native NAME
+\NAME: .4byte _\NAME
+.thumb_func
+_\NAME:
+.endm
+
+native EXIT
     sub rRP, #4
     ldr rIP, [rRP]
     b NEXT
 
-DOLITERAL:
-.4byte DOTHUMB
+native DOLIT
     push {rTOS}
     ldr rTOS, [rIP]
     add rIP, #4
     b NEXT
 
-DUP:
-.4byte DOTHUMB
+native DUP
     push {rTOS}
     b NEXT
 
-DROP:
-.4byte DOTHUMB
+native DROP
     pop {rTOS}
     b NEXT
 
-SWAP:
-.4byte DOTHUMB
+native SWAP
     pop {r0}
     push {rTOS}
     mov rTOS, r0
     b NEXT
 
-EMIT:
-.4byte DOTHUMB
+native EMIT
     ldr r0, =UARTDR
     str rTOS, [r0]
     pop {rTOS}
     b NEXT
 
-HALT:
-.4byte DOTHUMB
+native KEY
+    push {rTOS}
+    ldr r0, =UARTDR
+    ldr rTOS, [r0]
+    b NEXT
+
+native QDUP
+    cmp rTOS, #0
+    beq NEXT
+    push {rTOS}
+    b NEXT
+
+native BRANCH
+    ldr r0, [rIP]
+    add rIP, #4
+
+    lsl r0, #2
+    add rIP, r0
+    b NEXT
+
+native BRANCHZ
+    ldr r0, [rIP]
+    add rIP, #4
+
+    cmp rTOS, #0
+    bne .done
+
+    lsl r0, #2
+    add rIP, r0
+
+.done:
+    pop {rTOS}
+    b NEXT
+
+native HALT
 _halt: b _halt

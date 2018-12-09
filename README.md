@@ -6,6 +6,14 @@
 
 ## Features
 
-- outputs `HI` to the serial console (Ctrl+Alt+3 in qemu)
+- outputs `OK` to the serial console (Ctrl+Alt+3 in qemu)
+- echoes up to 15 keystrokes
+
+- words implemented:
+  - DUP DROP SWAP QDUP
+  - EMIT KEY HALT
+  - DOLIT ENTER EXIT BRANCHZ BRANCH
+
+## Internals
+
 - indirect threaded interpreter
-- words: DUP DROP SWAP EMIT HALT DOLITERAL ENTER EXIT
