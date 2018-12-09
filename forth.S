@@ -38,7 +38,7 @@ _exc6: b _exc6
 .thumb
 
 forth_start:
-.word INIT, HALT
+.4byte INIT, HALT
 
 @@ reset handler inits the Forth registers and kicks the whole thing off at INIT
 .globl _reset
@@ -79,50 +79,50 @@ ENTER:
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
 
 INIT:
-.word ENTER
-.word DOLITERAL, 72, EMIT, DOLITERAL, 73, EMIT, HALT
+.4byte ENTER
+.4byte DOLITERAL, 72, EMIT, DOLITERAL, 73, EMIT, HALT
 
 @ native words
-@@ each must be followed by .word DOTHUMB
+@@ each must be followed by .4byte DOTHUMB
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
 
 EXIT:
-.word DOTHUMB
+.4byte DOTHUMB
     sub rRP, #4
     ldr rIP, [rRP]
     b NEXT
 
 DOLITERAL:
-.word DOTHUMB
+.4byte DOTHUMB
     push {rTOS}
     ldr rTOS, [rIP]
     add rIP, #4
     b NEXT
 
 DUP:
-.word DOTHUMB
+.4byte DOTHUMB
     push {rTOS}
     b NEXT
 
 DROP:
-.word DOTHUMB
+.4byte DOTHUMB
     pop {rTOS}
     b NEXT
 
 SWAP:
-.word DOTHUMB
+.4byte DOTHUMB
     pop {r0}
     push {rTOS}
     mov rTOS, r0
     b NEXT
 
 EMIT:
-.word DOTHUMB
+.4byte DOTHUMB
     ldr r0, =UARTDR
     str rTOS, [r0]
     pop {rTOS}
     b NEXT
 
 HALT:
-.word DOTHUMB
+.4byte DOTHUMB
 _halt: b _halt
