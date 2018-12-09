@@ -1,8 +1,9 @@
+CFLAGS=-Wa,-mimplicit-it=always -c
 
 all: run
 
-forth.o: forth.s
-	arm-none-eabi-as $< -o $@
+forth.o: forth.S
+	arm-none-eabi-gcc $(CFLAGS) $< -o $@
 
 forth.elf: forth.o
 	arm-none-eabi-ld $< -o $@ -T lm3s6965.ld
