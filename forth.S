@@ -10,8 +10,12 @@
 @ memory map
 .equ SP0, 0x20000ffc
 .equ RP0, 0x20001000
+.equ TASK, 0x20000100
 
-.equ UARTDR, 0x4000C000
+.equ UARTDR, 0x4000C000  @ Data Register
+.equ UARTSR, 0x4000C004  @ Status Register
+.equ UARTFR, 0x4000C008  @ Flag Register
+.equ UARTIM, 0x4000C038  @ Interrupt Mask
 
 .text
 .align 4
@@ -73,11 +77,28 @@ ENTER:
 
 INIT:
 .4byte ENTER
-.4byte PROMPT, KEY, QDUP, BRANCHZ, -4, EMIT, BRANCH, -7, EXIT
+.4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
 PROMPT:
 .4byte ENTER
 .4byte DOLIT, 'O', EMIT, DOLIT, 'K', EMIT, DOLIT, 13, EMIT, EXIT
+
+KEY: @ ( -- k )
+.4byte ENTER
+.4byte DOLIT, UARTDR, FETCH, QDUP, BRANCHZ, -6, EXIT
+
+EMIT:
+.4byte ENTER
+.4byte DOLIT, UARTDR, STORE, EXIT
+
+UARTSTATUS:
+.4byte ENTER
+.4byte DOLIT, UARTSR, FETCH, EXIT
+
+DOT:
+.4byte ENTER
+.4byte DOLIT, '0', PLUS, EMIT, EXIT
+
 
 @ native words
 @@ each must be preceded by its own thumb address (ready to be branched to)
@@ -114,22 +135,22 @@ native SWAP
     mov rTOS, r0
     b NEXT
 
-native EMIT
-    ldr r0, =UARTDR
-    str rTOS, [r0]
+native STORE  @ ( val addr -- )
+    mov r0, rTOS
+    pop {r1}
     pop {rTOS}
+    str r1, [r0]
     b NEXT
 
-native KEY
-    push {rTOS}
-    ldr r0, =UARTDR
-    ldr rTOS, [r0]
+native FETCH  @ ( addr -- val )
+    ldr rTOS, [rTOS]
     b NEXT
 
-native QDUP
+native QDUP  @ ( 0|x -- 0 | x x )
     cmp rTOS, #0
-    beq NEXT
+    beq .QDUP.done
     push {rTOS}
+.QDUP.done:
     b NEXT
 
 native BRANCH
@@ -156,3 +177,8 @@ native BRANCHZ
 
 native HALT
 _halt: b _halt
+
+native PLUS
+    pop {r0}
+    add rTOS, r0
+    b NEXT

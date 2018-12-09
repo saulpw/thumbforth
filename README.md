@@ -11,6 +11,7 @@
 
 - words implemented:
   - DUP DROP SWAP QDUP
+  - STORE FETCH PLUS
   - EMIT KEY HALT
   - DOLIT ENTER EXIT BRANCHZ BRANCH
 
