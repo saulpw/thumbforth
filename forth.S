@@ -90,6 +90,102 @@ DOVAR:
     mov rTOS, rWP
     b NEXT
 
+@ native words
+@@ each must be preceded by its own thumb address (ready to be branched to)
+@@ must *not* use .thumb_func themselves, or their pointers will have bit 0 set
+
+.macro native NAME
+\NAME: .4byte _\NAME
+.thumb_func
+_\NAME:
+.endm
+
+native EXIT
+    sub rRP, #4
+    ldr rIP, [rRP]
+    b NEXT
+
+native DOLIT  @ ( -- v )
+    push {rTOS}
+    ldr rTOS, [rIP]
+    add rIP, #4
+    b NEXT
+
+native DUP  @ ( a -- a a )
+    push {rTOS}
+    b NEXT
+
+native DROP  @ ( a -- )
+    pop {rTOS}
+    b NEXT
+
+native SWAP  @ ( a b -- b a )
+    pop {r0}
+    push {rTOS}
+    mov rTOS, r0
+    b NEXT
+
+native STORE  @ ( val addr -- )
+    mov r0, rTOS
+    pop {r1}
+    pop {rTOS}
+    str r1, [r0]
+    b NEXT
+
+native FETCH  @ ( addr -- val )
+    ldr rTOS, [rTOS]
+    b NEXT
+
+native CFETCH  @ ( addr -- b )
+    ldrb rTOS, [rTOS]
+    b NEXT
+
+native QDUP  @ ( 0|x -- 0 | x x )
+    cmp rTOS, #0
+    beq .QDUP.done
+    push {rTOS}
+.QDUP.done:
+    b NEXT
+
+native BRANCH  @ ( -- )
+    ldr r0, [rIP]
+    add rIP, #4
+
+    lsl r0, #2
+    add rIP, r0
+    b NEXT
+
+native BRANCHZ  @ ( bool -- )
+    ldr r0, [rIP]
+    add rIP, #4
+
+    cmp rTOS, #0
+    bne .BRANCHZ.done
+
+    lsl r0, #2
+    add rIP, r0
+
+.BRANCHZ.done:
+    pop {rTOS}
+    b NEXT
+
+native HALT  @ ( -- )
+_halt: b _halt
+
+native PLUS  @ ( a b -- a+b )
+    pop {r0}
+    add rTOS, r0
+    b NEXT
+
+native CALLC2  @ ( a b func -- func[a,b] )
+    mov r0, rTOS
+    pop {r1}
+    ldr r2, [rIP]
+    add rIP, #4
+    blx r2
+    mov rTOS, r0
+    b NEXT
+
 @@@ manually defined composite forth words
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
 
@@ -123,7 +219,7 @@ EMIT: @ ( c -- ) UARTDR ! ;
 .4byte ENTER
 .4byte UARTDR, STORE, EXIT
 
-TYPE:  @ ( str -- )
+TYPE:  @ ( str -- ) BEGIN DUP C@ ?DUP NOT IF EXIT THEN EMIT 1 + AGAIN ;
 .4byte ENTER
 .4byte DUP, CFETCH, QDUP, BRANCHZ, +6, EMIT, DOLIT, 1, PLUS, BRANCH, -11, EXIT
 
@@ -131,108 +227,13 @@ DOT:  @ ( n -- ) [CHAR] 0 + EMIT ;
 .4byte ENTER
 .4byte DOLIT, '0', PLUS, EMIT, EXIT
 
-
-@ native words
-@@ each must be preceded by its own thumb address (ready to be branched to)
-@@ must *not* use .thumb_func themselves, or their pointers will have bit 0 set
-
-.macro native NAME
-\NAME: .4byte _\NAME
-.thumb_func
-_\NAME:
-.endm
-
-native EXIT
-    sub rRP, #4
-    ldr rIP, [rRP]
-    b NEXT
-
-native DOLIT
-    push {rTOS}
-    ldr rTOS, [rIP]
-    add rIP, #4
-    b NEXT
-
-native DUP
-    push {rTOS}
-    b NEXT
-
-native DROP
-    pop {rTOS}
-    b NEXT
-
-native SWAP
-    pop {r0}
-    push {rTOS}
-    mov rTOS, r0
-    b NEXT
-
-native STORE  @ ( val addr -- )
-    mov r0, rTOS
-    pop {r1}
-    pop {rTOS}
-    str r1, [r0]
-    b NEXT
-
-native FETCH  @ ( addr -- val )
-    ldr rTOS, [rTOS]
-    b NEXT
-
-native CFETCH  @ ( addr -- b )
-    ldrb rTOS, [rTOS]
-    b NEXT
-
-native QDUP  @ ( 0|x -- 0 | x x )
-    cmp rTOS, #0
-    beq .QDUP.done
-    push {rTOS}
-.QDUP.done:
-    b NEXT
-
-native BRANCH
-    ldr r0, [rIP]
-    add rIP, #4
-
-    lsl r0, #2
-    add rIP, r0
-    b NEXT
-
-native BRANCHZ
-    ldr r0, [rIP]
-    add rIP, #4
-
-    cmp rTOS, #0
-    bne .BRANCHZ.done
-
-    lsl r0, #2
-    add rIP, r0
-
-.BRANCHZ.done:
-    pop {rTOS}
-    b NEXT
-
-native HALT
-_halt: b _halt
-
-native PLUS
-    pop {r0}
-    add rTOS, r0
-    b NEXT
-
-native CALLC2
-    mov r0, rTOS
-    pop {r1}
-    ldr r2, [rIP]
-    add rIP, #4
-    blx r2
-    mov rTOS, r0
-    b NEXT
-
 WORD: @ ( delim -- tokptr )
 .4byte ENTER
 .4byte DROP  @ ignore delim for now
 .4byte CP, FETCH, PAD, CALLC2, parse_token
 .4byte CP, FETCH, PLUS, CP, STORE, PAD, EXIT
+
+@@@ initial source input
 
 kernel:
     .asciz "42 23 + ."
