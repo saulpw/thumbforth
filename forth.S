@@ -9,10 +9,10 @@
 
 @ memory map
 
-.equ CP,  0x20000100
-.equ PAD, 0x20000104
 .equ SP0, 0x20000ffc
 .equ RP0, 0x20001000
+.equ CPADDR, 0x20000100
+.equ PADADDR, 0x20000104
 
 .text
 .align 4
@@ -55,7 +55,7 @@ _reset:
     mov rTOS, #0
     ldr rIP, =forth_start
     ldr r0, =kernel
-    ldr r1, =CP
+    ldr r1, =CPADDR
     str r0, [r1]
     b NEXT
 
@@ -96,6 +96,9 @@ DOVAR:
 INIT: @ ( -- )
 .4byte ENTER
 .4byte PROMPT, KEY, EMIT, INTERPRET, BRANCH, -5, EXIT
+
+CP: .4byte DOCONST, CPADDR      @ Char Pointer
+PAD: .4byte DOCONST, PADADDR    @ scratch pad
 
 INTERPRET:  @  0 WORD FIND IF EXECUTE ELSE >NUMBER THEN ;
 .4byte ENTER
@@ -216,18 +219,20 @@ native PLUS
     add rTOS, r0
     b NEXT
 
-native WORD  @ ( delim -- wordptr )
-    ldr rTOS, =PAD  @ PAD is output of word
-    ldr rWP, =CP
-
+native CALLC2
     mov r0, rTOS
-    ldr r1, [rWP]
-    bl parse_token  @ n = parse_token(CP, PAD)
-
-    ldr r2, [rWP]
-    add r2, r0
-    str r2, [rWP]   @ CP += n
+    pop {r1}
+    ldr r2, [rIP]
+    add rIP, #4
+    blx r2
+    mov rTOS, r0
     b NEXT
+
+WORD: @ ( delim -- tokptr )
+.4byte ENTER
+.4byte DROP  @ ignore delim for now
+.4byte CP, FETCH, PAD, CALLC2, parse_token
+.4byte CP, FETCH, PLUS, CP, STORE, PAD, EXIT
 
 kernel:
     .asciz "42 23 + ."
