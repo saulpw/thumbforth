@@ -6,16 +6,18 @@
 
 ## Features
 
-- outputs `OK` to the serial console (Ctrl+Alt+3 in qemu)
+- outputs prompt to the serial console (Ctrl+Alt+3 in qemu)
 - echoes up to 15 keystrokes
 
 - words implemented:
   - DUP DROP SWAP QDUP
-  - STORE FETCH PLUS
-  - EMIT KEY HALT
+  - STORE FETCH CFETCH PLUS
+  - EMIT TYPE KEY HALT
   - DOLIT DOCONST DOVAR
   - ENTER EXIT BRANCHZ BRANCH
+  - WORD
 
 ## Internals
 
 - indirect threaded interpreter
+- call C functions

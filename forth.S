@@ -8,6 +8,9 @@
 #define rSP sp   /* parameter stack pointer */
 
 @ memory map
+
+.equ CP,  0x20000100
+.equ PAD, 0x20000104
 .equ SP0, 0x20000ffc
 .equ RP0, 0x20001000
 
@@ -51,6 +54,9 @@ _reset:
     ldr rRP, =RP0
     mov rTOS, #0
     ldr rIP, =forth_start
+    ldr r0, =kernel
+    ldr r1, =CP
+    str r0, [r1]
     b NEXT
 
 NEXT:
@@ -89,26 +95,36 @@ DOVAR:
 
 INIT: @ ( -- )
 .4byte ENTER
-.4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
+.4byte PROMPT, KEY, EMIT, INTERPRET, BRANCH, -5, EXIT
+
+INTERPRET:  @  0 WORD FIND IF EXECUTE ELSE >NUMBER THEN ;
+.4byte ENTER
+.4byte DOLIT, 0, WORD, TYPE, EXIT
 
 PROMPT: @ ( -- )
 .4byte ENTER
-.4byte DOLIT, 'O', EMIT, DOLIT, 'K', EMIT, DOLIT, 13, EMIT, EXIT
+.4byte DOLIT, _prompt, TYPE, EXIT
+
+_prompt: .asciz "READY> "
 
 UARTDR: .4byte DOCONST, 0x4000C000  @ Data Register
 UARTSR: .4byte DOCONST, 0x4000C004  @ Status Register
 UARTFR: .4byte DOCONST, 0x4000C008  @ Flag Register
 UARTIM: .4byte DOCONST, 0x4000C038  @ Interrupt Mask
 
-KEY: @ ( -- k )
+KEY: @ ( -- k ) BEGIN UARTDR @ ?DUP UNTIL ;
 .4byte ENTER
 .4byte UARTDR, FETCH, QDUP, BRANCHZ, -5, EXIT
 
-EMIT: @ ( c -- )
+EMIT: @ ( c -- ) UARTDR ! ;
 .4byte ENTER
 .4byte UARTDR, STORE, EXIT
 
-DOT:  @ ( n -- )
+TYPE:  @ ( str -- )
+.4byte ENTER
+.4byte DUP, CFETCH, QDUP, BRANCHZ, +6, EMIT, DOLIT, 1, PLUS, BRANCH, -11, EXIT
+
+DOT:  @ ( n -- ) [CHAR] 0 + EMIT ;
 .4byte ENTER
 .4byte DOLIT, '0', PLUS, EMIT, EXIT
 
@@ -159,6 +175,10 @@ native FETCH  @ ( addr -- val )
     ldr rTOS, [rTOS]
     b NEXT
 
+native CFETCH  @ ( addr -- b )
+    ldrb rTOS, [rTOS]
+    b NEXT
+
 native QDUP  @ ( 0|x -- 0 | x x )
     cmp rTOS, #0
     beq .QDUP.done
@@ -195,3 +215,19 @@ native PLUS
     pop {r0}
     add rTOS, r0
     b NEXT
+
+native WORD  @ ( delim -- wordptr )
+    ldr rTOS, =PAD  @ PAD is output of word
+    ldr rWP, =CP
+
+    mov r0, rTOS
+    ldr r1, [rWP]
+    bl parse_token  @ n = parse_token(CP, PAD)
+
+    ldr r2, [rWP]
+    add r2, r0
+    str r2, [rWP]   @ CP += n
+    b NEXT
+
+kernel:
+    .asciz "42 23 + ."
