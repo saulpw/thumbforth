@@ -15,25 +15,31 @@
 .align 4
 
 @@@ exception/interrupt vector table in memory at 0x0
-.4byte SP0        @ initial SP
-.4byte _reset     @ reset PC
-.4byte _exc2      @ nmi
-.4byte _exc3      @ hard fault
-.4byte _exc4      @ mm fault
-.4byte _exc5      @ bus fault
-.4byte _exc6      @ usage fault
+.4byte SP0        @  0  initial SP
+.4byte _reset     @  1  reset PC
+.4byte _exc       @  2  nmi
+.4byte _exc       @  3  hard fault
+.4byte _exc       @  4  mm fault
+.4byte _exc       @  5  bus fault
+.4byte _exc       @  6  usage fault
+.4byte 0          @  7  reserved
+.4byte 0          @  8  reserved
+.4byte 0          @  9  reserved
+.4byte 0          @ 10  reserved
+.4byte _exc       @ 11  SVCall
+.4byte _exc       @ 12  reserved for debug
+.4byte 0          @ 13  reserved
+.4byte _exc       @ 14  PendSV
+.4byte _exc       @ 15  Systick
+.4byte _exc       @ 16  IRQ0
+.4byte _exc       @ 17  IRQ1
+.4byte _exc       @ 18  IRQ2
+
 @ ... other interrupts not handled ...
 
-@@ exception handlers in ARM format
-.arm
-_exc2: b _exc2
-_exc3: b _exc3
-_exc4: b _exc4
-_exc5: b _exc5
-_exc6: b _exc6
-
-@ rest of code in Thumb format
-.thumb
+.thumb            @ all code in Thumb format
+.thumb_func
+_exc: b _exc
 
 forth_start:
 .4byte INIT, HALT
