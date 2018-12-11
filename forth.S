@@ -12,7 +12,8 @@
 .equ SP0, 0x20000ffc
 .equ RP0, 0x20001000
 .equ CPADDR, 0x20000100
-.equ PADADDR, 0x20000104
+.equ LASTADDR, 0x20000104
+.equ PADADDR, 0x20000204
 
 .text
 .align 4
@@ -54,9 +55,14 @@ _reset:
     ldr rRP, =RP0
     mov rTOS, #0
     ldr rIP, =forth_start
+
     ldr r0, =kernel
     ldr r1, =CPADDR
     str r0, [r1]
+
+@    ldr r0, =
+@    ldr r1, =LASTADDR
+@    str r0, [r1]
     b NEXT
 
 NEXT:
@@ -204,14 +210,16 @@ native CALLC2  @ ( a b -- func[a,b] )
 
 INIT: @ ( -- )
 .4byte ENTER
-.4byte PROMPT, KEY, EMIT, INTERPRET, BRANCH, -5, EXIT
+.4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
+LAST: .4byte DOCONST, LASTADDR  @ pointer to Last entry in dict
 CP: .4byte DOCONST, CPADDR      @ Char Pointer
 PAD: .4byte DOCONST, PADADDR    @ scratch pad
 
 INTERPRET:  @  0 WORD FIND IF EXECUTE ELSE >NUMBER THEN ;
 .4byte ENTER
-.4byte DOLIT, 0, WORD, TYPE, EXIT
+.4byte DOLIT, 0, WORD, FIND, BRANCHZ, +3
+.4byte EXECUTE, BRANCH, +1, TONUM, EXIT
 
 PROMPT: @ ( -- )
 .4byte ENTER
@@ -245,6 +253,15 @@ WORD: @ ( delim -- tokptr )
 .4byte DROP  @ ignore delim for now
 .4byte CP, FETCH, PAD, CALLC2, parse_token
 .4byte CP, FETCH, PLUS, CP, STORE, PAD, EXIT
+
+FIND: @ ( tok -- xt 1 | tok 0 )
+.4byte ENTER
+.4byte DUP, LAST, FETCH, CALLC2, find_entry  @ ( tok 0|ent )
+.4byte DUP, BRANCHZ, +4, SWAP, DROP, DOLIT, 1, EXIT
+
+TONUM: @ ( str -- n )
+.4byte ENTER
+.4byte CALLC1, atoi, EXIT
 
 @@@ initial source input
 
