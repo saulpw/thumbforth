@@ -6,6 +6,7 @@
 #define rRP r6   /* return stack pointer */
 #define rIP r7   /* forth next word pointer */
 #define rSP sp   /* parameter stack pointer */
+                 /* lr holds a pointer to NEXT */
 
 @ memory map
 
@@ -48,6 +49,10 @@ _exc: b _exc
 forth_start:
 .4byte INIT, HALT
 
+.macro NEXT
+    bx lr
+.endm
+
 @@ reset handler inits the Forth registers and kicks the whole thing off at INIT
 .globl _reset
 .thumb_func
@@ -60,12 +65,16 @@ _reset:
     ldr r1, =CPADDR
     str r0, [r1]
 
-@    ldr r0, =
+    ldr r0, =_NEXT
+    mov lr, r0
+
+@    ldr r0, ??
 @    ldr r1, =LASTADDR
 @    str r0, [r1]
-    b NEXT
+    NEXT
 
-NEXT:
+.thumb_func
+_NEXT:
     ldr r0, [rIP]    @ load next word pointer
     add rIP, #4
 
@@ -82,19 +91,19 @@ ENTER:
     str rIP, [rRP]
     add rRP, #4
     mov rIP, rWP
-    b NEXT
+    NEXT
 
 .thumb_func
 DOCONST:
     push {rTOS}
     ldr rTOS, [rWP]
-    b NEXT
+    NEXT
 
 .thumb_func
 DOVAR:
     push {rTOS}
     mov rTOS, rWP
-    b NEXT
+    NEXT
 
 @ native words
 @@ each must be preceded by its own thumb address (ready to be branched to)
@@ -109,49 +118,49 @@ _\NAME:
 native EXIT
     sub rRP, #4
     ldr rIP, [rRP]
-    b NEXT
+    NEXT
 
 native DOLIT  @ ( -- v )
     push {rTOS}
     ldr rTOS, [rIP]
     add rIP, #4
-    b NEXT
+    NEXT
 
 native DUP  @ ( a -- a a )
     push {rTOS}
-    b NEXT
+    NEXT
 
 native DROP  @ ( a -- )
     pop {rTOS}
-    b NEXT
+    NEXT
 
 native SWAP  @ ( a b -- b a )
     pop {r0}
     push {rTOS}
     mov rTOS, r0
-    b NEXT
+    NEXT
 
 native STORE  @ ( val addr -- )
     mov r0, rTOS
     pop {r1}
     pop {rTOS}
     str r1, [r0]
-    b NEXT
+    NEXT
 
 native FETCH  @ ( addr -- val )
     ldr rTOS, [rTOS]
-    b NEXT
+    NEXT
 
 native CFETCH  @ ( addr -- b )
     ldrb rTOS, [rTOS]
-    b NEXT
+    NEXT
 
 native QDUP  @ ( 0|x -- 0 | x x )
     cmp rTOS, #0
     beq .QDUP.done
     push {rTOS}
 .QDUP.done:
-    b NEXT
+    NEXT
 
 native BRANCH  @ ( -- )
     ldr r0, [rIP]
@@ -159,7 +168,7 @@ native BRANCH  @ ( -- )
 
     lsl r0, #2
     add rIP, r0
-    b NEXT
+    NEXT
 
 native BRANCHZ  @ ( bool -- )
     ldr r0, [rIP]
@@ -173,7 +182,7 @@ native BRANCHZ  @ ( bool -- )
 
 .BRANCHZ.done:
     pop {rTOS}
-    b NEXT
+    NEXT
 
 native HALT  @ ( -- )
 _halt: b _halt
@@ -181,7 +190,7 @@ _halt: b _halt
 native PLUS  @ ( a b -- a+b )
     pop {r0}
     add rTOS, r0
-    b NEXT
+    NEXT
 
 native EXECUTE  @ ( ? xt -- ? )
     mov rWP, rTOS
@@ -194,7 +203,7 @@ native CALLC1  @ ( a -- func[a] )
     add rIP, #4
     blx r2
     mov rTOS, r0
-    b NEXT
+    NEXT
 
 native CALLC2  @ ( a b -- func[a,b] )
     mov r0, rTOS
@@ -203,7 +212,7 @@ native CALLC2  @ ( a b -- func[a,b] )
     add rIP, #4
     blx r2
     mov rTOS, r0
-    b NEXT
+    NEXT
 
 @@@ manually defined composite forth words
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
