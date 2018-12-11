@@ -75,13 +75,11 @@ _reset:
 
 .thumb_func
 _NEXT:
-    ldr r0, [rIP]    @ load next word pointer
+    ldr rWP, [rIP]    @ load next word pointer
     add rIP, #4
 
-    add rWP, r0, #4  @ setup data pointer for code word
-
-    ldr r0, [r0]     @ indirect threading
-    bx r0            @ jump to code word
+    ldr r0, [rWP]     @ indirect threading
+    bx r0             @ jump to code word
 
 @@@ code word definitions (rWP will contain pointer to data immediately following code word pointer)
 @@ each must be preceded by .thumb_func for their pointers to have bit 0 set for Thumb instruction set
@@ -90,19 +88,21 @@ _NEXT:
 ENTER:
     str rIP, [rRP]
     add rRP, #4
-    mov rIP, rWP
+
+    add rIP, rWP, #4  @ setup data pointer for code word
     NEXT
 
 .thumb_func
 DOCONST:
     push {rTOS}
+    add rWP, #4
     ldr rTOS, [rWP]
     NEXT
 
 .thumb_func
 DOVAR:
     push {rTOS}
-    mov rTOS, rWP
+    add rTOS, rWP, #4
     NEXT
 
 @ native words
