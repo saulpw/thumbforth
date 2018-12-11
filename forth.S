@@ -177,7 +177,20 @@ native PLUS  @ ( a b -- a+b )
     add rTOS, r0
     b NEXT
 
-native CALLC2  @ ( a b func -- func[a,b] )
+native EXECUTE  @ ( ? xt -- ? )
+    mov rWP, rTOS
+    pop {rTOS}
+    b ENTER
+
+native CALLC1  @ ( a -- func[a] )
+    mov r0, rTOS
+    ldr r2, [rIP]
+    add rIP, #4
+    blx r2
+    mov rTOS, r0
+    b NEXT
+
+native CALLC2  @ ( a b -- func[a,b] )
     mov r0, rTOS
     pop {r1}
     ldr r2, [rIP]
