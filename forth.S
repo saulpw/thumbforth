@@ -86,10 +86,10 @@ _NEXT:
 
 .thumb_func
 ENTER:
-    str rIP, [rRP]
+    str rIP, [rRP]     @ RPUSH return IP
     add rRP, #4
 
-    add rIP, rWP, #4  @ setup data pointer for code word
+    add rIP, rWP, #4   @ PFA for ENTER is list of execution token (xt)
     NEXT
 
 .thumb_func
