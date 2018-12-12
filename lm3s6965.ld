@@ -7,5 +7,6 @@ MEMORY
 SECTIONS
 {
    .text : { *(.text*) } > flash
+   .rodata : { *(.rodata*) } > flash
    .data : { *(.data*) } > ram
 }

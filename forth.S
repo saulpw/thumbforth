@@ -10,11 +10,11 @@
 
 @ memory map
 
-.equ SP0, 0x20000ffc
-.equ RP0, 0x20001000
-.equ CPADDR, 0x20000100
-.equ LASTADDR, 0x20000104
-.equ PADADDR, 0x20000204
+.set SP0, 0x20000ffc     @ Bottom parameter stack pointer
+.set RP0, 0x20001000     @ Bottom return stack pointer
+.set LASTADDR, 0x0       @ LAST maintained by macros
+.set CPADDR, 0x20000100  @ Initial input
+.set PADADDR, 0x20000204 @ allocated PAD area
 
 .text
 .align 4
@@ -66,11 +66,8 @@ _reset:
     str r0, [r1]
 
     ldr r0, =_NEXT
-    mov lr, r0
+    mov lr, r0        @ bx lr == b _NEXT
 
-@    ldr r0, ??
-@    ldr r1, =LASTADDR
-@    str r0, [r1]
     NEXT
 
 .thumb_func
@@ -113,12 +110,25 @@ DOCONST: .4byte FETCH, EXIT
 
 @ native words
 @@ each must be preceded by its own thumb address (ready to be branched to)
-@@ must *not* use .thumb_func themselves, or their pointers will have bit 0 set
+@@ must *not* use .thumb_func themselves (because it is not callable code)
 
 .macro native NAME
-\NAME: .4byte _\NAME
+.section .rodata
+name_\NAME:
+    .asciz "\NAME"
+
+.section .text
+dict_\NAME:
+    .4byte LASTADDR
+    .4byte name_\NAME
+
+\NAME:  @ execution token (xt)
+    .4byte asm_\NAME
+
+.set LASTADDR, dict_\NAME
+
 .thumb_func
-_\NAME:
+asm_\NAME:
 .endm
 
 native EXIT
@@ -227,7 +237,6 @@ INIT: @ ( -- )
 .4byte ENTER
 .4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
-defconst LAST, LASTADDR  @ pointer to Last entry in dict
 defconst CP, CPADDR      @ Char Pointer
 defconst PAD, PADADDR    @ scratch pad
 
@@ -279,6 +288,8 @@ TONUM: @ ( str -- n )
 .4byte CALLC1, atoi, EXIT
 
 @@@ initial source input
+
+defconst LAST, LASTADDR  @ pointer to last entry in pre-assembled dict
 
 kernel:
     .asciz "42 23 + ."
