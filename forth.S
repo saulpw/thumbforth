@@ -93,17 +93,23 @@ ENTER:
     NEXT
 
 .thumb_func
-DOCONST:
+DODOES:
+    str rIP, [rRP]     @ RPUSH return IP
+    add rRP, #4
+
     push {rTOS}
-    add rWP, #4
-    ldr rTOS, [rWP]
+    add r0, rWP, #4    @ pointer to address of high-level code
+    add rTOS, r0, #4   @ pointer to parameter field
+
+    ldr rIP, [r0]      @ start interpreting DODOES thread
+
     NEXT
 
-.thumb_func
-DOVAR:
-    push {rTOS}
-    add rTOS, rWP, #4
-    NEXT
+DOCONST: .4byte FETCH, EXIT
+
+.macro defconst NAME, VALUE
+\NAME: .4byte DODOES, DOCONST, \VALUE
+.endm
 
 @ native words
 @@ each must be preceded by its own thumb address (ready to be branched to)
@@ -221,9 +227,9 @@ INIT: @ ( -- )
 .4byte ENTER
 .4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
-LAST: .4byte DOCONST, LASTADDR  @ pointer to Last entry in dict
-CP: .4byte DOCONST, CPADDR      @ Char Pointer
-PAD: .4byte DOCONST, PADADDR    @ scratch pad
+defconst LAST, LASTADDR  @ pointer to Last entry in dict
+defconst CP, CPADDR      @ Char Pointer
+defconst PAD, PADADDR    @ scratch pad
 
 INTERPRET:  @  0 WORD FIND IF EXECUTE ELSE >NUMBER THEN ;
 .4byte ENTER
@@ -236,10 +242,10 @@ PROMPT: @ ( -- )
 
 _prompt: .asciz "READY> "
 
-UARTDR: .4byte DOCONST, 0x4000C000  @ Data Register
-UARTSR: .4byte DOCONST, 0x4000C004  @ Status Register
-UARTFR: .4byte DOCONST, 0x4000C008  @ Flag Register
-UARTIM: .4byte DOCONST, 0x4000C038  @ Interrupt Mask
+defconst UARTDR, 0x4000C000  @ Data Register
+defconst UARTSR, 0x4000C004  @ Status Register
+defconst UARTFR, 0x4000C008  @ Flag Register
+defconst UARTIM, 0x4000C038  @ Interrupt Mask
 
 KEY: @ ( -- k ) BEGIN UARTDR @ ?DUP UNTIL ;
 .4byte ENTER
