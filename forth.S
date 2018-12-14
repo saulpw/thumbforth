@@ -105,6 +105,7 @@ DODOES:
 DOCONST: .4byte FETCH, EXIT
 
 .macro defconst NAME, VALUE
+dict \NAME
 \NAME: .4byte DODOES, DOCONST, \VALUE
 .endm
 
@@ -112,23 +113,34 @@ DOCONST: .4byte FETCH, EXIT
 @@ each must be preceded by its own thumb address (ready to be branched to)
 @@ must *not* use .thumb_func themselves (because it is not callable code)
 
-.macro native NAME
+.macro dict NAME, FNAME
 .section .rodata
 name_\NAME:
-    .asciz "\NAME"
+    .asciz "\FNAME"
 
 .section .text
 dict_\NAME:
     .4byte LASTADDR
     .4byte name_\NAME
 
+.set LASTADDR, dict_\NAME
+.endm
+
+.macro native NAME, FNAME
+dict \NAME, \FNAME
+
 \NAME:  @ execution token (xt)
     .4byte asm_\NAME
 
-.set LASTADDR, dict_\NAME
-
 .thumb_func
 asm_\NAME:
+.endm
+
+@ colon defs are the list of words to execute, finishing with EXIT
+.macro colon NAME, FNAME
+dict \NAME, \FNAME
+\NAME:
+.4byte ENTER
 .endm
 
 native EXIT
@@ -156,22 +168,22 @@ native SWAP  @ ( a b -- b a )
     mov rTOS, r0
     NEXT
 
-native STORE  @ ( val addr -- )
+native STORE, "!"  @ ( val addr -- )
     mov r0, rTOS
     pop {r1}
     pop {rTOS}
     str r1, [r0]
     NEXT
 
-native FETCH  @ ( addr -- val )
+native FETCH, "@"  @ ( addr -- val )
     ldr rTOS, [rTOS]
     NEXT
 
-native CFETCH  @ ( addr -- b )
+native CFETCH, "C@"  @ ( addr -- b )
     ldrb rTOS, [rTOS]
     NEXT
 
-native QDUP  @ ( 0|x -- 0 | x x )
+native QDUP, "?DUP"  @ ( 0|x -- 0 | x x )
     cmp rTOS, #0
     beq .QDUP.done
     push {rTOS}
@@ -203,9 +215,18 @@ native BRANCHZ  @ ( bool -- )
 native HALT  @ ( -- )
 _halt: b _halt
 
-native PLUS  @ ( a b -- a+b )
+native PLUS, "+"  @ ( a b -- a+b )
     pop {r0}
     add rTOS, r0
+    NEXT
+
+native NOT   @ ( a -- ~a )
+    mov r0, rTOS
+    mov rTOS, #0
+    cmp r0, #0
+    bne NOT.done
+    sub rTOS, #1
+NOT.done:
     NEXT
 
 native EXECUTE  @ ( ? xt -- ? )
@@ -235,7 +256,7 @@ native CALLC2  @ ( a b -- func[a,b] )
 
 INIT: @ ( -- )
 .4byte ENTER
-.4byte PROMPT, KEY, EMIT, BRANCH, -4, EXIT
+.4byte WORDS, PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
 defconst CP, CPADDR      @ Char Pointer
 defconst PAD, PADADDR    @ scratch pad
@@ -286,6 +307,9 @@ FIND: @ ( tok -- xt 1 | tok 0 )
 TONUM: @ ( str -- n )
 .4byte ENTER
 .4byte CALLC1, atoi, EXIT
+
+colon WORDS  @ ( -- )  LAST BEGIN DUP 4 + @ TYPE @ ?DUP NOT UNTIL ;
+.4byte LAST, DUP, DOLIT, 4, PLUS, FETCH, TYPE, FETCH, QDUP, NOT, BRANCHZ, -10, EXIT
 
 @@@ initial source input
 
