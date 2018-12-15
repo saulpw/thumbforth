@@ -12,8 +12,9 @@
 
 .set SP0, 0x20000ffc     @ Bottom parameter stack pointer
 .set RP0, 0x20001000     @ Bottom return stack pointer
-.set LASTADDR, 0x0       @ LAST maintained by macros
+.set LASTWORD, 0x0       @ LAST maintained by macros
 .set CPADDR, 0x20000100  @ Initial input
+.set LASTADDR, 0x20000104  @ Initial LAST word
 .set PADADDR, 0x20000204 @ allocated PAD area
 
 .text
@@ -57,18 +58,18 @@ forth_start:
 .globl _reset
 .thumb_func
 _reset:
+    bl forth_init
+
     ldr rRP, =RP0
     mov rTOS, #0
     ldr rIP, =forth_start
-
-    ldr r0, =kernel
-    ldr r1, =CPADDR
-    str r0, [r1]
 
     ldr r0, =_NEXT
     mov lr, r0        @ bx lr == b _NEXT
 
     NEXT
+
+.pool  @ for constants in _reset
 
 .thumb_func
 _NEXT:
@@ -120,10 +121,10 @@ name_\NAME:
 
 .section .text
 dict_\NAME:
-    .4byte LASTADDR
+    .4byte LASTWORD
     .4byte name_\NAME
 
-.set LASTADDR, dict_\NAME
+.set LASTWORD, dict_\NAME
 .endm
 
 .macro native NAME, FNAME
@@ -143,26 +144,26 @@ dict \NAME, \FNAME
 .4byte ENTER
 .endm
 
-native EXIT
+native EXIT, "EXIT"
     sub rRP, #4
     ldr rIP, [rRP]
     NEXT
 
-native DOLIT  @ ( -- v )
+native DOLIT, "DOLIT"  @ ( -- v )
     push {rTOS}
     ldr rTOS, [rIP]
     add rIP, #4
     NEXT
 
-native DUP  @ ( a -- a a )
+native DUP, "DUP"  @ ( a -- a a )
     push {rTOS}
     NEXT
 
-native DROP  @ ( a -- )
+native DROP, "DROP"  @ ( a -- )
     pop {rTOS}
     NEXT
 
-native SWAP  @ ( a b -- b a )
+native SWAP, "SWAP"  @ ( a b -- b a )
     pop {r0}
     push {rTOS}
     mov rTOS, r0
@@ -212,7 +213,21 @@ native BRANCHZ  @ ( bool -- )
     pop {rTOS}
     NEXT
 
-native HALT  @ ( -- )
+native BRANCHNZ, "BRANCHNZ"  @ ( bool -- )
+    ldr r0, [rIP]
+    add rIP, #4
+
+    cmp rTOS, #0
+    beq .BRANCHNZ.done
+
+    lsl r0, #2
+    add rIP, r0
+
+.BRANCHNZ.done:
+    pop {rTOS}
+    NEXT
+
+native HALT, "HALT"  @ ( -- )
 _halt: b _halt
 
 native PLUS, "+"  @ ( a b -- a+b )
@@ -220,7 +235,7 @@ native PLUS, "+"  @ ( a b -- a+b )
     add rTOS, r0
     NEXT
 
-native NOT   @ ( a -- ~a )
+native NOT, "NOT"   @ ( a -- ~a )
     mov r0, rTOS
     mov rTOS, #0
     cmp r0, #0
@@ -229,12 +244,12 @@ native NOT   @ ( a -- ~a )
 NOT.done:
     NEXT
 
-native EXECUTE  @ ( ? xt -- ? )
+native EXECUTE, "EXECUTE"  @ ( ? xt -- ? )
     mov rWP, rTOS
     pop {rTOS}
     b ENTER
 
-native CALLC1  @ ( a -- func[a] )
+native CALLC1, "CALLC1"  @ ( a -- func[a] )
     mov r0, rTOS
     ldr r2, [rIP]
     add rIP, #4
@@ -242,7 +257,7 @@ native CALLC1  @ ( a -- func[a] )
     mov rTOS, r0
     NEXT
 
-native CALLC2  @ ( a b -- func[a,b] )
+native CALLC2, "CALLC2"  @ ( a b -- func[a,b] )
     mov r0, rTOS
     pop {r1}
     ldr r2, [rIP]
@@ -254,66 +269,94 @@ native CALLC2  @ ( a b -- func[a,b] )
 @@@ manually defined composite forth words
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
 
-INIT: @ ( -- )
-.4byte ENTER
+colon INIT, "INIT" @ ( -- )
 .4byte WORDS, PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
 defconst CP, CPADDR      @ Char Pointer
 defconst PAD, PADADDR    @ scratch pad
+defconst LAST, LASTADDR  @ pointer to last entry in pre-assembled dict
 
-INTERPRET:  @  0 WORD FIND IF EXECUTE ELSE >NUMBER THEN ;
-.4byte ENTER
+colon INTERPRET, "INTERPRET"  @  0 WORD FIND IF EXECUTE ELSE >NUMBER THEN ;
 .4byte DOLIT, 0, WORD, FIND, BRANCHZ, +3
 .4byte EXECUTE, BRANCH, +1, TONUM, EXIT
 
-PROMPT: @ ( -- )
-.4byte ENTER
+colon PROMPT, PROMPT @ ( -- )
 .4byte DOLIT, _prompt, TYPE, EXIT
 
-_prompt: .asciz "READY> "
+_prompt:
+.byte 13, 10
+.asciz "READY> "
 
 defconst UARTDR, 0x4000C000  @ Data Register
 defconst UARTSR, 0x4000C004  @ Status Register
 defconst UARTFR, 0x4000C008  @ Flag Register
 defconst UARTIM, 0x4000C038  @ Interrupt Mask
 
-KEY: @ ( -- k ) BEGIN UARTDR @ ?DUP UNTIL ;
-.4byte ENTER
+colon KEY, "KEY" @ ( -- k ) BEGIN UARTDR @ ?DUP UNTIL ;
 .4byte UARTDR, FETCH, QDUP, BRANCHZ, -5, EXIT
 
-EMIT: @ ( c -- ) UARTDR ! ;
-.4byte ENTER
+colon EMIT, "EMIT" @ ( c -- ) UARTDR ! ;
 .4byte UARTDR, STORE, EXIT
 
-TYPE:  @ ( str -- ) BEGIN DUP C@ ?DUP NOT IF EXIT THEN EMIT 1 + AGAIN ;
-.4byte ENTER
-.4byte DUP, CFETCH, QDUP, BRANCHZ, +6, EMIT, DOLIT, 1, PLUS, BRANCH, -11, EXIT
+@colon TYPE, "TYPE"  @ ( str -- ) BEGIN DUP C@ ?DUP NOT IF EXIT THEN EMIT 1 + AGAIN ;
+@.4byte DUP, CFETCH, QDUP, BRANCHZ, +6, EMIT, DOLIT, 1, PLUS, BRANCH, -11, EXIT
 
-DOT:  @ ( n -- ) [CHAR] 0 + EMIT ;
-.4byte ENTER
+native TYPE, "TYPE"
+    ldr r0, =#0x4000C000
+    mov r1, #0
+
+TYPE.loop:
+    ldrb r1, [rTOS]
+    cmp r1, #0
+    beq TYPE.done
+    str r1, [r0]
+    add rTOS, #1
+    b TYPE.loop
+
+TYPE.done:
+    pop {rTOS}
+    NEXT
+
+colon DOT, "."  @ ( n -- ) [CHAR] 0 + EMIT ;
 .4byte DOLIT, '0', PLUS, EMIT, EXIT
 
-WORD: @ ( delim -- tokptr )
-.4byte ENTER
+colon WORD, "WORD" @ ( delim -- tokptr )
 .4byte DROP  @ ignore delim for now
 .4byte CP, FETCH, PAD, CALLC2, parse_token
 .4byte CP, FETCH, PLUS, CP, STORE, PAD, EXIT
 
-FIND: @ ( tok -- xt 1 | tok 0 )
-.4byte ENTER
+colon FIND, "FIND" @ ( tok -- xt 1 | tok 0 )
 .4byte DUP, LAST, FETCH, CALLC2, find_entry  @ ( tok 0|ent )
 .4byte DUP, BRANCHZ, +4, SWAP, DROP, DOLIT, 1, EXIT
 
-TONUM: @ ( str -- n )
-.4byte ENTER
+colon TONUM, ">NUM" @ ( str -- n )
 .4byte CALLC1, atoi, EXIT
 
-colon WORDS  @ ( -- )  LAST BEGIN DUP 4 + @ TYPE @ ?DUP NOT UNTIL ;
-.4byte LAST, DUP, DOLIT, 4, PLUS, FETCH, TYPE, FETCH, QDUP, NOT, BRANCHZ, -10, EXIT
+colon WORDS, "WORDS"  @ ( -- )  LAST BEGIN DUP 4 + @ TYPE @ ?DUP NOT UNTIL ;
+.4byte LAST, FETCH  @ ( wordptr )
+.4byte DUP, DOLIT, 4, PLUS, FETCH, TYPE @ display wordname
+.4byte DOLIT, 32, EMIT  @ display space
+.4byte FETCH  @ ( wordptr->prev )
+.4byte QDUP, BRANCHNZ, -13, EXIT
+
+
+@@ setup global variables
+@ must go after last dictionary word for LASTWORD to be actual last word
+.globl forth_init
+forth_init:
+    ldr r0, =kernel
+    ldr r1, =CPADDR
+    str r0, [r1]
+
+    ldr r0, =LASTWORD
+    ldr r1, =LASTADDR
+    str r0, [r1]
+
+    bx lr
+
+.pool
 
 @@@ initial source input
-
-defconst LAST, LASTADDR  @ pointer to last entry in pre-assembled dict
 
 kernel:
     .asciz "42 23 + ."

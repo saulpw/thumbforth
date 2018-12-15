@@ -11,13 +11,19 @@
 
 - words implemented:
   - DUP DROP SWAP QDUP
-  - STORE FETCH CFETCH PLUS
+  - STORE FETCH CFETCH PLUS NOT
   - EMIT TYPE KEY HALT
-  - DOLIT DOCONST DOVAR
-  - ENTER EXIT BRANCHZ BRANCH
-  - WORD
+  - DOLIT DOCONST DODOES
+  - ENTER EXIT BRANCHZ BRANCH EXECUTE CALLC1 CALLC2
+  - WORD FIND LAST WORDS
 
 ## Internals
 
 - indirect threaded interpreter
 - call C functions
+- word layout in dictionary (must be const in flash):
+   - [0] (prev) pointer to previous word
+   - [4] (name) char * (C NUL-termined string)
+   - [8] (xt) code field, pointer to native code (with thumb bit set)
+   - [12] (doesip) [if codefield is DODOES] pointer to DOES IP
+   - [12 or 16] (parameter field)
