@@ -10,18 +10,18 @@
 
 @ memory map
 
-.set SP0, 0x20000ffc     @ Bottom parameter stack pointer
-.set RP0, 0x20001000     @ Bottom return stack pointer
-.set LASTWORD, 0x0       @ LAST maintained by macros
-.set CPADDR, 0x20000100  @ Initial input
+.set k_SP0, 0x20000ff8     @ Bottom parameter stack pointer (grows down)
+.set k_RP0, 0x20001000     @ Bottom return stack pointer (grows up)
+.set LASTWORD, 0x0         @ LAST maintained by macros
+.set CPADDR, 0x20000100    @ Initial input
 .set LASTADDR, 0x20000104  @ Initial LAST word
-.set PADADDR, 0x20000204 @ allocated PAD area
+.set PADADDR, 0x20000204   @ allocated PAD area
 
 .text
 .align 4
 
 @@@ exception/interrupt vector table in memory at 0x0
-.4byte SP0        @  0  initial SP
+.4byte k_SP0      @  0  initial SP
 .4byte _reset     @  1  reset PC
 .4byte _exc       @  2  nmi
 .4byte _exc       @  3  hard fault
@@ -60,7 +60,7 @@ forth_start:
 _reset:
     bl forth_init
 
-    ldr rRP, =RP0
+    ldr rRP, =k_RP0
     mov rTOS, #0
     ldr rIP, =forth_start
 
@@ -84,16 +84,16 @@ _NEXT:
 
 .thumb_func
 ENTER:
-    str rIP, [rRP]     @ RPUSH return IP
     add rRP, #4
+    str rIP, [rRP]     @ RPUSH return IP
 
     add rIP, rWP, #4   @ PFA for ENTER is list of execution token (xt)
     NEXT
 
 .thumb_func
 DODOES:
-    str rIP, [rRP]     @ RPUSH return IP
     add rRP, #4
+    str rIP, [rRP]     @ RPUSH return IP
 
     push {rTOS}
     add r0, rWP, #4    @ pointer to address of high-level code
@@ -145,8 +145,8 @@ dict \NAME, \FNAME
 .endm
 
 native EXIT, "EXIT"
-    sub rRP, #4
     ldr rIP, [rRP]
+    sub rRP, #4
     NEXT
 
 native DOLIT, "DOLIT"  @ ( -- v )
@@ -167,6 +167,55 @@ native SWAP, "SWAP"  @ ( a b -- b a )
     pop {r0}
     push {rTOS}
     mov rTOS, r0
+    NEXT
+
+native OVER, "OVER"  @ ( a b -- a b a )
+    push {rTOS}
+    ldr rTOS, [rSP, #4]
+    NEXT
+
+native ROT, "ROT"  @ ( a b c -- b c a )
+    pop {r1}
+    pop {r0}
+    push {r1}
+    push {rTOS}
+    mov rTOS, r0
+    NEXT
+
+native SPFETCH, "SP@"  @ ( -- psp )
+    push {rTOS}
+    add rTOS, rSP, #4  @ SP before SP was pushed
+    NEXT
+
+native RPFETCH, "RP@"  @ ( -- rsp )
+    push {rTOS}
+    mov rTOS, rRP
+    NEXT
+
+native R_TO, "R>"  @ (R: x -- ) ( -- x )
+    push {rTOS}
+    ldr rTOS, [rRP]     @ RPOP
+    sub rRP, #4
+    NEXT
+
+native RDROP, "R>DROP"  @ (R: x -- )
+    sub rRP, #4
+    NEXT
+
+native TO_R, ">R"  @ ( x -- ) (R: -- x )
+    add rRP, #4
+    str rTOS, [rRP]     @ RPUSH x
+    pop {rTOS}
+    NEXT
+
+native EQUAL, "\x3D"  @ ( a b -- fl )
+    pop {r0}
+    mov r1, rTOS
+    mov rTOS, #1  @ nonzero=equal
+    cmp r0, r1
+    beq EQUAL.done
+    mov rTOS, #0  @ zero=not equal
+EQUAL.done:
     NEXT
 
 native STORE, "!"  @ ( val addr -- )
@@ -253,25 +302,49 @@ native CALLC1, "CALLC1"  @ ( a -- func[a] )
     mov r0, rTOS
     ldr r2, [rIP]
     add rIP, #4
+
     blx r2
     mov rTOS, r0
+
+    ldr r0, =_NEXT       @ re-setup NEXT
+    mov lr, r0
     NEXT
 
 native CALLC2, "CALLC2"  @ ( a b -- func[a,b] )
     mov r0, rTOS
     pop {r1}
-    ldr r2, [rIP]
+    ldr r3, [rIP]
     add rIP, #4
-    blx r2
+
+    blx r3
     mov rTOS, r0
+
+    ldr r0, =_NEXT       @ re-setup NEXT
+    mov lr, r0
+    NEXT
+
+native CALLC3, "CALLC3"  @ ( a b c -- func[a,b,c] )
+    mov r0, rTOS
+    pop {r1}
+    pop {r2}
+    ldr r3, [rIP]
+    add rIP, #4
+
+    blx r3
+    mov rTOS, r0
+
+    ldr r0, =_NEXT       @ re-setup NEXT
+    mov lr, r0
     NEXT
 
 @@@ manually defined composite forth words
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
 
 colon INIT, "INIT" @ ( -- )
-.4byte WORDS, PROMPT, KEY, EMIT, BRANCH, -4, EXIT
+.4byte TEST, WORDS, PROMPT, KEY, EMIT, BRANCH, -4, EXIT
 
+defconst SP0, k_SP0-8    @ first element of parameter stack
+defconst RP0, k_RP0+4    @ bottom of return stack
 defconst CP, CPADDR      @ Char Pointer
 defconst PAD, PADADDR    @ scratch pad
 defconst LAST, LASTADDR  @ pointer to last entry in pre-assembled dict
@@ -317,8 +390,11 @@ TYPE.done:
     pop {rTOS}
     NEXT
 
-colon DOT, "."  @ ( n -- ) [CHAR] 0 + EMIT ;
-.4byte DOLIT, '0', PLUS, EMIT, EXIT
+colon DOT, "."  @ ( n -- )
+.4byte DOLIT, 10, PAD, ROT, CALLC3, itoa, TYPE, SPACE, EXIT
+
+colon SPACE, "SPACE"  @ ( n -- )
+.4byte DOLIT, 32, EMIT, EXIT
 
 colon WORD, "WORD" @ ( delim -- tokptr )
 .4byte DROP  @ ignore delim for now
@@ -332,13 +408,25 @@ colon FIND, "FIND" @ ( tok -- xt 1 | tok 0 )
 colon TONUM, ">NUM" @ ( str -- n )
 .4byte CALLC1, atoi, EXIT
 
-colon WORDS, "WORDS"  @ ( -- )  LAST BEGIN DUP 4 + @ TYPE @ ?DUP NOT UNTIL ;
-.4byte LAST, FETCH  @ ( wordptr )
-.4byte DUP, DOLIT, 4, PLUS, FETCH, TYPE @ display wordname
-.4byte DOLIT, 32, EMIT  @ display space
+colon WORDS, "WORDS"  @ ( -- )
+.4byte HALT, LAST, FETCH  @ ( wordptr )
+.4byte DUP, DOLIT, 4, PLUS, FETCH, TYPE, SPACE @ display wordname
 .4byte FETCH  @ ( wordptr->prev )
-.4byte QDUP, BRANCHNZ, -13, EXIT
+.4byte QDUP, BRANCHNZ, -11, EXIT
 
+colon CR, "CR" @ ( -- )
+.4byte DOLIT, 13, EMIT, DOLIT, 10, EMIT, EXIT
+
+colon DOTSTACK, ".S"  @ ( -- )
+.4byte SP0, DUP, FETCH, DOT, DOLIT, -4, PLUS, DUP, SPFETCH, EQUAL, BRANCHZ, -11, DROP, CR, EXIT
+
+colon DOTRSTACK, "R.S"  @ ( -- )
+.4byte RP0, DUP, FETCH, DOT, DOLIT, +4, PLUS, DUP, RPFETCH, EQUAL, BRANCHZ, -11, DROP, CR, EXIT
+
+colon TEST, "TEST" @ ( -- )
+.4byte DOLIT, 10, DOLIT, 20, DOLIT, 30, DOTSTACK
+.4byte TO_R, TO_R, TO_R, DOTRSTACK, RDROP, RDROP, RDROP
+.4byte EXIT
 
 @@ setup global variables
 @ must go after last dictionary word for LASTWORD to be actual last word

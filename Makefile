@@ -1,5 +1,6 @@
 AFLAGS=-Wa,-mimplicit-it=always
-CFLAGS=-mthumb -Os
+CFLAGS=-mthumb -ggdb
+LDPATH=/usr/lib/gcc/arm-none-eabi/6.3.1/thumb/v7e-m/
 
 all: run
 
@@ -10,7 +11,7 @@ forth.o: forth.S
 	arm-none-eabi-gcc $(AFLAGS) $< -c -o $@
 
 forth.elf: forth.o parse.o
-	arm-none-eabi-ld $^ -o $@ -T lm3s6965.ld
+	arm-none-eabi-ld $^ -L$(LDPATH) -lgcc -o $@ -T lm3s6965.ld
 
 forth.bin: forth.elf
 	arm-none-eabi-objdump -D $< > $@.lst
