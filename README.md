@@ -11,13 +11,13 @@
 
 - words implemented:
   - `DUP DROP SWAP ROT ?DUP`
-  - `! @ C@ + NOT`
+  - `! @ C@ + - * NOT`
   - `EMIT TYPE CR SPACE . KEY HALT`
   - `DOLIT DOCONST DODOES`
   - `ENTER EXIT BRANCHZ BRANCH EXECUTE CALLC1 CALLC2 CALLC3`
   - `WORD FIND LAST WORDS`
   - `SP0 SP@ .S`
-  - `RP0 RP@ R.S R> >R RDROP`
+  - `RP0 RP@ R.S R> >R RDROP R@`
 
 ## Internals
 

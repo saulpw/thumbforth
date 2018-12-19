@@ -198,8 +198,13 @@ native R_TO, "R>"  @ (R: x -- ) ( -- x )
     sub rRP, #4
     NEXT
 
-native RDROP, "R>DROP"  @ (R: x -- )
+native RDROP, "RDROP"  @ (R: x -- )
     sub rRP, #4
+    NEXT
+
+native RFETCH, "R@"  @ (R: x -- x ) ( -- x )
+    push {rTOS}
+    ldr rTOS, [rRP]     @ RPOP
     NEXT
 
 native TO_R, ">R"  @ ( x -- ) (R: -- x )
@@ -282,6 +287,16 @@ _halt: b _halt
 native PLUS, "+"  @ ( a b -- a+b )
     pop {r0}
     add rTOS, r0
+    NEXT
+
+native MINUS, "-"  @ ( a b -- a-b )
+    pop {r0}
+    mul rTOS, r0
+    NEXT
+
+native MULT, "*"  @ ( a b -- a*b )
+    pop {r0}
+    mul rTOS, r0
     NEXT
 
 native NOT, "NOT"   @ ( a -- ~a )
