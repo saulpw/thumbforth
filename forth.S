@@ -105,11 +105,6 @@ DODOES:
 
 DOCONST: .4byte FETCH, EXIT
 
-.macro defconst NAME, VALUE
-dict \NAME
-\NAME: .4byte DODOES, DOCONST, \VALUE
-.endm
-
 @ native words
 @@ each must be preceded by its own thumb address (ready to be branched to)
 @@ must *not* use .thumb_func themselves (because it is not callable code)
@@ -125,14 +120,12 @@ dict_\NAME:
     .4byte name_\NAME
 
 .set LASTWORD, dict_\NAME
+\NAME:  @ the execution token (xt) points to here
 .endm
 
 .macro native NAME, FNAME
 dict \NAME, \FNAME
-
-\NAME:  @ execution token (xt)
-    .4byte asm_\NAME
-
+.4byte asm_\NAME
 .thumb_func
 asm_\NAME:
 .endm
@@ -140,8 +133,18 @@ asm_\NAME:
 @ colon defs are the list of words to execute, finishing with EXIT
 .macro colon NAME, FNAME
 dict \NAME, \FNAME
-\NAME:
 .4byte ENTER
+.endm
+
+.macro defconst NAME, VALUE
+dict \NAME
+.4byte DODOES, DOCONST, \VALUE
+.endm
+
+.macro defcstr NAME, VALUE
+dict \NAME
+.4byte DODOES, DONOP
+.asciz "\VALUE"
 .endm
 
 native EXIT, "EXIT"
@@ -351,6 +354,8 @@ native CALLC3, "CALLC3"  @ ( a b c -- func[a,b,c] )
     ldr r0, =_NEXT       @ re-setup NEXT
     mov lr, r0
     NEXT
+
+.pool
 
 @@@ manually defined composite forth words
 @@ must *not* use .thumb_func, or their pointers will have bit 0 set
